@@ -1,0 +1,57 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const app = express();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http);
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+
+// MongoDB Connection
+mongoose.connect('mongodb://localhost:27017/cab_booking', { useNewUrlParser: true, useUnifiedTopology: true });
+
+// Schemas
+const User = mongoose.model('User', {
+  name: String,
+  email: String,
+  phone: String,
+  location: { type: { lat: Number, lng: Number }, default: null },
+});
+
+const Ride = mongoose.model('Ride', {
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  pickup: { lat: Number, lng: Number },
+  dropoff: { lat: Number, lng: Number },
+  fare: Number,
+  status: { type: String, enum: ['pending', 'accepted', 'completed'], default: 'pending' },
+});
+
+// Ride Booking API
+app.post('/api/ride-request', async (req, res) => {
+  const { userId, pickup, dropoff } = req.body;
+  const fare = 25; // Replace with dynamic fare calculation
+  const ride = new Ride({ userId, pickup, dropoff, fare });
+  await ride.save();
+  io.emit('new-ride', ride); // Notify drivers
+  res.status(201).json(ride);
+});
+
+// Socket.io for Real-Time Tracking
+io.on('connection', (socket) => {
+  socket.on('driver-location', (data) => {
+    io.emit('location-update', data); // Broadcast driver's location
+  });
+
+  socket.on('ride-accepted', (rideId) => {
+    Ride.findByIdAndUpdate(rideId, { status: 'accepted' }, (err, ride) => {
+      io.emit('ride-status', ride); // Notify user
+    });
+  });
+});
+
+// Start Server
+http.listen(3000, () => console.log('Backend running on port 3000'));
