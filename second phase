@@ -1,0 +1,55 @@
+import React, { useState, useEffect } from 'react';
+import { View, Button, Text } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
+import io from 'socket.io-client';
+
+const socket = io('http://YOUR_BACKEND_IP:3000'); // Replace with your backend IP
+
+const RideBookingScreen = () => {
+  const [pickup, setPickup] = useState(null);
+  const [driverLocation, setDriverLocation] = useState(null);
+
+  useEffect(() => {
+    socket.on('location-update', (data) => {
+      setDriverLocation(data);
+    });
+  }, []);
+
+  const requestRide = async () => {
+    const response = await fetch('http://YOUR_BACKEND_IP:3000/api/ride-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: 'user123',
+        pickup: { lat: 37.7749, lng: -122.4194 }, // Example: San Francisco
+        dropoff: { lat: 37.3352, lng: -122.0096 }, // Example: Mountain View
+      }),
+    });
+    const ride = await response.json();
+    console.log('Ride booked:', ride);
+  };
+
+  return (
+    <View style={{ flex: 1 }}>
+      <MapView
+        style={{ flex: 1 }}
+        initialRegion={{
+          latitude: 37.7749,
+          longitude: -122.4194,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        }}
+      >
+        {driverLocation && (
+          <Marker
+            coordinate={{ latitude: driverLocation.lat, longitude: driverLocation.lng }}
+            title="Driver Location"
+          />
+        )}
+      </MapView>
+      <Button title="Book Ride" onPress={requestRide} />
+    </View>
+  );
+};
+
+export default RideBookingScreen;
